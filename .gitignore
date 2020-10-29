@@ -2,3 +2,4 @@
 *.pkl
 ckpts/
 .ipynb_checkpoints/
+*.mp4

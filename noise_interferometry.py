@@ -11,15 +11,18 @@ from obspy.core import UTCDateTime
 from ooipy.hydrophone import Noise_Interferometry as NI
 import pickle
 
-num_periods = 500 
+num_periods = 2 
 avg_time = 60  #minutes
-start_time = datetime.datetime(2017,3,10,0,0,0) # time of first sample
-node1 = '/LJ01C'
-node2 = '/PC01A'
-filter_cutoffs = [12, 30]
+start_time = datetime.datetime(2017,3,10,23,0,0) # time of first sample
+node1 = 'Central_Caldera'
+node2 = 'Axial_Base'
+filter_cutoffs = np.array([1, 90])
 W = 90
-htype = 'broadband'
+htype = 'low_frequency'
 whiten= True
-kstart= 408
+kstart= 0
+other_notes = 'Test on Other Notes about experiment'
+sp_method = 'sabra'
 
-NI.calculate_NCF_loop(num_periods, node1, node2, avg_time, start_time, W, filter_cutoffs, verbose=True, whiten=whiten, htype=htype, kstart=kstart)
+NI.calculate_NCF_loop(num_periods, node1, node2, avg_time, start_time, W, filter_cutoffs, verbose=True, whiten=whiten, htype=htype, kstart=kstart, sp_method = sp_method, other_notes=other_notes)
+
