@@ -3,3 +3,6 @@
 ckpts/
 .ipynb_checkpoints/
 *.mp4
+figures/
+*.pycache
+*.pyc

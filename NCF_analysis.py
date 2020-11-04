@@ -6,6 +6,7 @@ import seaborn as sns
 import matplotlib.animation as animation
 import matplotlib
 import progressbar
+import scipy
 
 class NCF_analysis:
 
@@ -100,9 +101,9 @@ class NCF_analysis:
         print(f'Number of Available hours: {num_available}')
 
 
-    def average_NCF(self, num_hours):
+    def average_NCF(self, hour_start, hour_end, plot=False):
         invalid = 0
-        for k in range(num_hours):
+        for k in range(hour_start,hour_end):
             ckpt_name = os.getcwd() + '/NCFs/' + self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
             try:
                 with open(ckpt_name, 'rb') as f:
@@ -123,51 +124,66 @@ class NCF_analysis:
         xcorr_avg = xcorr / self.num_available
 
         self.xcorr = xcorr_avg
+
+        num_available_short = hour_end - hour_start - invalid
+        if plot:
+            self.NCF_plot(xcorr_avg, num_available_short)
         return xcorr_avg
 
 
-    def NCF_plot(self, save_fig=False, file_name = None):
+    def NCF_plot(self, xcorr, num_valid, save_fig=False, file_name=None, frequency=False):
         if 'self.xcorr' not in locals():
             Exception: 'Must Calculate average NCF first. use average_NCF(num_hours) method'
-        xcorr = self.xcorr
         dt = 1/self.Fs
         t = np.arange(-xcorr.shape[0]*dt/2,xcorr.shape[0]*dt/2,dt)
+        f = np.linspace(0,self.Fs,xcorr.shape[0])
         node1 = self.node1.replace("_"," ")
         node2 = self.node2.replace("_"," ")
 
         sns.set()
         f1 = plt.figure(figsize=(7,5))
-        plt.plot(t, xcorr)
-        plt.title(f'{self.num_available} Hours - {node1}/{node2} - Average NCF', fontsize=18, y=1.08)
+        if frequency:
+            plt.plot(f,np.abs(scipy.fft.fft(xcorr)))
+            plt.xlim([0,self.Fs/2])
+            plt.title(f'{num_valid} Hours - {node1}/{node2} - Spectrum', fontsize=18, y=1.08)
+            plt.xlabel('Frequency (Hz)', fontsize=14)
+            plt.ylabel('Average NCF Spectrum Amplitude', fontsize=14)
+        else:
+            plt.plot(t, xcorr)
+            plt.title(f'{num_valid} Hours - {node1}/{node2} - Average NCF', fontsize=18, y=1.08)
 
-        plt.xlabel('Delay τ (s)', fontsize=14)
-        plt.ylabel('Average NCF Amplitude', fontsize=14)
+            plt.xlabel('Delay τ (s)', fontsize=14)
+            plt.ylabel('Average NCF Amplitude', fontsize=14)
         plt.xticks(fontsize=12)
         plt.yticks(fontsize=12)
         if save_fig:
             f1.savefig(file_name + '.png', dpi=500)
 
 
+    def animate_NCF(self, num_hours, length, file_name, ylim, frequency=False):
+        # matplotlib.rcParams[figure.max_open_warning'] = 0
 
-    def animate_NCF(self, num_hours, length, file_name, ylim):
         def init():
             line.set_data([], [])
             time_text.set_text('')
             return line,time_text,
 
+        # Hard Coded to Animate in Reverse
         def animate(i):
             dt = 1/self.Fs
             t = np.arange(-xcorr.shape[0]*dt/2,xcorr.shape[0]*dt/2,dt)
-
+            f = np.linspace(0,self.Fs,xcorr.shape[0])
             try:
-                y = self.average_NCF(i)
+                y = self.average_NCF(num_hours-i,num_hours)
             except:
                 y = np.squeeze(np.zeros((xcorr.shape[0],1)))
 
             line.set_data(t, y)
-            time_text.set_text(f'Hour: {i}')
+            if frequency:
+                line.set_data(f,np.abs(scipy.fft.fft(y)))
+            time_text.set_text(f'Hour: {num_hours-i}')
 
-            ax.set_xlim([-90,90])
+            ax.set_xlim([-self.W,self.W])
             bar.update(i)
             return line, time_text,
 
