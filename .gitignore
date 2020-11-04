@@ -6,3 +6,4 @@ ckpts/
 figures/
 *.pycache
 *.pyc
+NCFs/

@@ -14,11 +14,11 @@ import pickle
 num_periods = 1
 avg_time = 60  #minutes
 start_time = datetime.datetime(2017,3,10,0,0,0) # time of first sample
-node1 = 'Central_Caldera'
-node2 = 'Axial_Base'
-filter_cutoffs = np.array([1, 90])
+node1 = '/PC01A'
+node2 = '/LJ01C'
+filter_cutoffs = np.array([10, 950])
 W = 90
-htype = 'low_frequency'
+htype = 'broadband'
 whiten= True
 kstart= 0
 other_notes = 'zero phase filtering'
