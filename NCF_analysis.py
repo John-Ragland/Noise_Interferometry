@@ -16,8 +16,8 @@ class NCF_analysis:
     Attributes
     ----------
     ckpt_dir : str
-        name of specific NCF directory. NCF .pkl files will be located at
-        ./NCFs/ckpt_dir
+        name of specific NCF directory. NCF .pkl files will be located in ckpt_dir
+        where ckpt_dir is an absolute path
 
     Methods
     -------
@@ -43,8 +43,7 @@ class NCF_analysis:
 
 
     def read_header(self):
-        header_name = os.path.dirname(os.getcwd()) + \
-            '/Noise_Interferometry/NCFs/' + self.ckpt_dir + '/0HEADER.pkl'
+        header_name = self.ckpt_dir + '/0HEADER.pkl'
 
         with open(header_name, 'rb') as f:
             header = pickle.load(f)
@@ -81,8 +80,7 @@ class NCF_analysis:
         num_available = 0
 
         for k in range(self.num_periods):
-            ckpt_name = os.getcwd() + '/NCFs/' + self.ckpt_dir + \
-                '/ckpt_' + str(k) + '.pkl'
+            ckpt_name = self.ckpt_dir + '/ckpt_' + str(k) + '.pkl'
             try:
                 with open(ckpt_name, 'rb') as f:
                     xcorr_1hr = pickle.load(f)
@@ -104,7 +102,7 @@ class NCF_analysis:
     def average_NCF(self, hour_start, hour_end, plot=False):
         invalid = 0
         for k in range(hour_start,hour_end):
-            ckpt_name = os.getcwd() + '/NCFs/' + self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
+            ckpt_name = self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
             try:
                 with open(ckpt_name, 'rb') as f:
                     xcorr_1hr = pickle.load(f)
@@ -235,7 +233,7 @@ class NCF_analysis:
         header.num_periods = 1000
 
         header_name = os.path.dirname(os.getcwd()) + \
-            '/Noise_Interferometry/NCFs/' + self.ckpt_dir + '/0HEADER.pkl'
+            'self.ckpt_dir' + '/0HEADER.pkl'
 
         with open(header_name, 'wb') as f:
             pickle.dump(header, f)
