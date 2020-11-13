@@ -16,8 +16,8 @@ class NCF_analysis:
     Attributes
     ----------
     ckpt_dir : str
-        name of specific NCF directory. NCF .pkl files will be located at
-        ./NCFs/ckpt_dir
+        name of specific NCF directory. NCF .pkl files will be located in ckpt_dir
+        where ckpt_dir is an absolute path
 
     Methods
     -------
@@ -43,8 +43,7 @@ class NCF_analysis:
 
 
     def read_header(self):
-        header_name = os.path.dirname(os.getcwd()) + \
-            '/Noise_Interferometry/NCFs/' + self.ckpt_dir + '/0HEADER.pkl'
+        header_name = self.ckpt_dir + '/0HEADER.pkl'
 
         with open(header_name, 'rb') as f:
             header = pickle.load(f)
@@ -71,9 +70,9 @@ class NCF_analysis:
         print(header.sp_method)
         try:
             print(header.other_notes)
-            return
+            return header
         except:
-            return
+            return header
 
 
     def available_hours(self):
@@ -81,8 +80,7 @@ class NCF_analysis:
         num_available = 0
 
         for k in range(self.num_periods):
-            ckpt_name = os.getcwd() + '/NCFs/' + self.ckpt_dir + \
-                '/ckpt_' + str(k) + '.pkl'
+            ckpt_name = self.ckpt_dir + '/ckpt_' + str(k) + '.pkl'
             try:
                 with open(ckpt_name, 'rb') as f:
                     xcorr_1hr = pickle.load(f)
@@ -104,7 +102,7 @@ class NCF_analysis:
     def average_NCF(self, hour_start, hour_end, plot=False):
         invalid = 0
         for k in range(hour_start,hour_end):
-            ckpt_name = os.getcwd() + '/NCFs/' + self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
+            ckpt_name = self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
             try:
                 with open(ckpt_name, 'rb') as f:
                     xcorr_1hr = pickle.load(f)
@@ -131,7 +129,7 @@ class NCF_analysis:
         return xcorr_avg
 
 
-    def NCF_plot(self, xcorr, num_valid, save_fig=False, file_name=None, frequency=False):
+    def NCF_plot(self, xcorr, num_valid, save_fig=False, file_name=None, frequency=False, xlimits=None, symetric=False):
         if 'self.xcorr' not in locals():
             Exception: 'Must Calculate average NCF first. use average_NCF(num_hours) method'
         dt = 1/self.Fs
@@ -148,21 +146,45 @@ class NCF_analysis:
             plt.title(f'{num_valid} Hours - {node1}/{node2} - Spectrum', fontsize=18, y=1.08)
             plt.xlabel('Frequency (Hz)', fontsize=14)
             plt.ylabel('Average NCF Spectrum Amplitude', fontsize=14)
+
+        elif symetric:
+            import math as m
+            xcorr1 = xcorr[:m.floor(len(xcorr)/2)]
+            xcorr2 = xcorr[m.ceil(len(xcorr)/2):]
+
+            xcorr_sym = xcorr2 + np.flip(xcorr1)
+            t_sym = t[m.ceil(len(xcorr)/2):]
+            plt.plot(t_sym, xcorr_sym)
+            plt.title(f'{num_valid} Hours - {node1}/{node2} - Average NCF', fontsize=18, y=1.08)
+
+            plt.xlabel('Delay τ (s)', fontsize=14)
+            plt.ylabel('Average NCF Amplitude', fontsize=14)
+            if xlimits is not None:
+                plt.xlim(xlimits)
         else:
             plt.plot(t, xcorr)
             plt.title(f'{num_valid} Hours - {node1}/{node2} - Average NCF', fontsize=18, y=1.08)
 
             plt.xlabel('Delay τ (s)', fontsize=14)
             plt.ylabel('Average NCF Amplitude', fontsize=14)
+            if xlimits is not None:
+                plt.xlim(xlimits)
         plt.xticks(fontsize=12)
         plt.yticks(fontsize=12)
         if save_fig:
             f1.savefig(file_name + '.png', dpi=500)
 
 
-    def animate_NCF(self, num_hours, length, file_name, ylim, frequency=False):
-        # matplotlib.rcParams[figure.max_open_warning'] = 0
+    def animate_NCF(self, num_hours, length, file_name, xlim=None, frequency=False, interval=1, dpi=None):
+        interval=int(interval)
 
+        # set y limit
+        xcorr = self.average_NCF(1,num_hours)
+        ylim = np.max(np.abs(xcorr))
+
+        # matplotlib.rcParams[figure.max_open_warning'] = 0
+        if xlim == None:
+            xlim = [-self.W,self.W]
         def init():
             line.set_data([], [])
             time_text.set_text('')
@@ -170,20 +192,21 @@ class NCF_analysis:
 
         # Hard Coded to Animate in Reverse
         def animate(i):
+            i = interval*i
             dt = 1/self.Fs
             t = np.arange(-xcorr.shape[0]*dt/2,xcorr.shape[0]*dt/2,dt)
             f = np.linspace(0,self.Fs,xcorr.shape[0])
             try:
-                y = self.average_NCF(num_hours-i,num_hours)
+                y = self.average_NCF(1,i)
             except:
                 y = np.squeeze(np.zeros((xcorr.shape[0],1)))
 
             line.set_data(t, y)
             if frequency:
                 line.set_data(f,np.abs(scipy.fft.fft(y)))
-            time_text.set_text(f'Hour: {num_hours-i}')
+            time_text.set_text(f'Hour: {i}')
 
-            ax.set_xlim([-self.W,self.W])
+            ax.set_xlim(xlim)
             bar.update(i)
             return line, time_text,
 
@@ -198,7 +221,19 @@ class NCF_analysis:
         bar.start()
 
         anim = animation.FuncAnimation(
-            fig, animate, init_func=init, frames=num_hours, interval=1, blit=False)
+            fig, animate, init_func=init, frames=int(num_hours/interval), interval=1, blit=False)
+        if dpi == None:
+            anim.save(file_name+'.mp4',fps=int((num_hours/interval)/length))
+        else:
+            anim.save(file_name+'.mp4',fps=int((num_hours/interval)/length), dpi=dpi)
 
-        anim.save(file_name+'.mp4',fps=num_hours/length, dpi=200)
 
+    def edit_header(self):
+        header = self.read_header()
+        header.num_periods = 1000
+
+        header_name = os.path.dirname(os.getcwd()) + \
+            'self.ckpt_dir' + '/0HEADER.pkl'
+
+        with open(header_name, 'wb') as f:
+            pickle.dump(header, f)
