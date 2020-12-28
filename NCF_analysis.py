@@ -142,18 +142,24 @@ class NCF_analysis:
 
     def average_NCF(self, hour_start, hour_end, plot=False):
         invalid = 0
+        #print(self.W)
+        #print(self.Fs)
+        #print(hour_start)
+        #print(hour_end)
 
         for k in range(hour_start,hour_end):
             ckpt_name = self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
             try:
                 with open(ckpt_name, 'rb') as f:
                     xcorr_1hr = pickle.load(f)
+
             except:
                 invalid = invalid + 1
                 continue
 
             if np.isnan(np.sum(xcorr_1hr)):
                 invalid = invalid + 1
+                continue
 
             else:
                 try:
@@ -161,6 +167,14 @@ class NCF_analysis:
                 except NameError:
                     xcorr = xcorr_1hr
 
+        # Check if variable xcorr exists, if not create NaN entry
+        try:
+            xcorr
+        except NameError:
+            xcorr_len = 2*self.W*self.Fs - 1
+            xcorr = np.empty(xcorr_len)
+            xcorr[:] = np.NaN
+            print('Entire Average Period Invalid')
         num_available = hour_end - hour_start - invalid
         self.num_available = num_available
         xcorr_avg = xcorr / num_available #changed from num_available
@@ -212,7 +226,8 @@ class NCF_analysis:
             if ylimits is not None:
                 plt.ylim(ylimits)
         else:
-            plt.plot(t, xcorr)
+            xcorr_c = signal.hilbert(xcorr)
+            plt.plot(t, np.abs(xcorr_c))
             # plt.title(f'{num_valid} Hours - {node1}/{node2} - Average NCF', fontsize=18, y=1.08)
 
             plt.xlabel('Delay τ (s)', fontsize=14)
@@ -332,7 +347,6 @@ class NCF_analysis:
             anim.save(file_name+'.mp4',fps=int((num_hours/interval)/length))
         else:
             anim.save(file_name+'.mp4',fps=int((num_hours/interval)/length), dpi=dpi)
-
 
 
     def animate_tdoa(self, num_hours, length, file_name, xlim=None, frequency=False, interval=1, dpi=None):
@@ -811,3 +825,37 @@ class NCF_analysis:
         antipode_coord = [antlat, antlon]
         return antipode_coord
 
+
+    def MA_TDGF(self, avg_time):
+        '''
+        avg_time : int
+            number of hours each TDGF is estimated from (must be odd)
+        '''
+
+        exp_length = self.num_periods
+
+        if avg_time > exp_length:
+            raise Exception ('average time is longer than experiment length')
+        if avg_time % 2 is not 1:
+            raise Exception ('average time must be odd')
+
+        m = avg_time
+        n = exp_length
+
+        bar = progressbar.ProgressBar(maxval=n-m-1, \
+            widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
+        bar.start()
+
+        tdgfs = []
+        for k in range(n-m-1):
+            ma_start = k
+            ma_mid = int(k + (m-1)/2)
+            ma_end = k+m-1
+            
+            try:
+                tdgfs.append(self.average_NCF(ma_start,ma_end))
+            except UnboundLocalError:
+                print('test')
+            bar.update(k)
+        
+        return np.array(tdgfs)

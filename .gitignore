@@ -9,3 +9,5 @@ figures/
 NCFs/
 *.json
 *.html
+*.mat
+*.DS_Store
