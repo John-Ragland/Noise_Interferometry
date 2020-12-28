@@ -35,11 +35,6 @@ from multiprocessing.pool import ThreadPool
 import scipy
 from matplotlib import pyplot as plt
 
-cwd = os.getcwd()
-ooipy_dir = os.path.dirname(os.path.dirname(cwd))
-sys.path.append(ooipy_dir)
-
-
 def calculate_NCF(NCF_object, loop=False, count=None):
     '''
     Do all required signal processing, and calculate average Noise
