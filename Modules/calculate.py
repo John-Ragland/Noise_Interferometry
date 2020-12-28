@@ -22,10 +22,15 @@ also accomplished in the calculate_NCF() function)::
     NCF_object.NCF
 '''
 # Import all dependencies
-from ooipy.request import hydrophone_request
-import numpy as np
+# Imports unrealeased version of OOIPY from Github (saved locally)
 import os
 import sys
+cwd = os.getcwd()
+ooipy_dir = os.path.dirname(os.path.dirname(cwd)) + '/ooipy'
+sys.path.append(ooipy_dir)
+
+from ooipy.request import hydrophone_request
+import numpy as np
 from scipy import signal
 import time
 import multiprocessing as mp
@@ -772,8 +777,8 @@ def calc_xcorr_single_thread(h1, h2):
 
 def calculate_NCF_loop(
     num_periods, node1, node2, avg_time, start_time, W, filter_cutoffs,
-        verbose=True, whiten=True, htype='broadband', kstart=0,
-        sp_method='sabra', other_notes=None):
+        verbose=True, whiten=True, htype='low_frequency', kstart=0,
+        sp_method='sabra_b', other_notes=None):
     '''
     This function loops through multiple average periods and calculates
     the NCF. The resulting NCF is saved to disk in the file directory
@@ -1040,8 +1045,8 @@ class NCF:
 
     def __init__(
         self, avg_time, start_time, node1, node2, filter_cutoffs, W,
-            verbose=False, whiten=True, htype='broadband', num_periods=None,
-            sp_method='sabra', other_notes=None):
+            verbose=False, whiten=True, htype='low_frequency', num_periods=None,
+            sp_method='sabra_b', other_notes=None):
 
         self.avg_time = avg_time
         self.start_time = start_time

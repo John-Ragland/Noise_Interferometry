@@ -29,3 +29,20 @@ sp_method = 'sabra_b'
 
 calculate.calculate_NCF_loop(num_periods, node1, node2, avg_time, start_time, W, filter_cutoffs, verbose=True, whiten=whiten, htype=htype, kstart=kstart, sp_method = sp_method, other_notes=other_notes)
 
+# Archive #
+'''
+# Create instance of NCF object
+avg_time = 60 #minute
+start_time = datetime.datetime(2017,3,10,0,0,0)
+node1 = 'Eastern_Caldera'
+node2 = 'Central_Caldera'
+filter_cutoffs = np.array([1, 90])
+W = 30
+htype = 'low_frequency'
+sp_method = 'sabra_b'
+NCF0 = NI.NCF(avg_time, start_time, node1, node2, filter_cutoffs, W, verbose=True, whiten=True, htype=htype, sp_method=sp_method)
+NCF0 = NI.calculate_NCF(NCF0)
+
+# Loop Through 2 Instances of calculate NCF Loop
+NI.calculate_NCF_loop(2, node1, node2, 1, start_time, W,  filter_cutoffs, verbose=True, whiten=True, htype=htype, sp_method='sabra_b')
+'''
