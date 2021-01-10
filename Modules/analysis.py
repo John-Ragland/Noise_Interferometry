@@ -8,9 +8,9 @@ import matplotlib
 import progressbar
 import scipy
 from scipy import signal
+import datetime
 
 class NCCF_experiment:
-
     '''
     class with tools for analyzing NCFs. NCF experiments are stored in ./NCFs.
 
@@ -142,7 +142,7 @@ class NCCF_experiment:
         print(f'Number of Available hours: {num_available}')
 
 
-    def average_NCF(self, hour_start, hour_end, plot=False):
+    def average_NCF(self, hour_start, hour_end, plot=False, verbose=False):
         invalid = 0
 
         for k in range(hour_start,hour_end):
@@ -172,7 +172,7 @@ class NCCF_experiment:
             xcorr_len = 2*self.W*self.Fs - 1
             xcorr = np.empty(xcorr_len)
             xcorr[:] = np.NaN
-            print('\n Entire Average Period Invalid')
+            if verbose: print('\n Entire Average Period Invalid')
         num_available = hour_end - hour_start - invalid
         self.num_available = num_available
         xcorr_avg = xcorr / num_available #changed from num_available
@@ -186,8 +186,7 @@ class NCCF_experiment:
         num_available_short = hour_end - hour_start - invalid
         if plot:
             self.NCF_plot(xcorr_avg, num_available_short)
-        
-        print(xcorr_avg.shape)
+
         return xcorr_avg
 
 
@@ -834,39 +833,83 @@ class NCCF_experiment:
         return antipode_coord
 
 
-    def MA_TDGF(self, avg_time):
+    def MA_TDGF(self, avg_time, stride, start_hour = 0, end_hour = None,
+                verbose=True):
         '''
+        MA_TDGF - calculates the moving average of a NCCF experiment. Returns
+            a 2D array with dimensions defined as [date, Tau]
+
+        Parameters:
+        -----------
         avg_time : int
             number of hours each TDGF is estimated from (must be odd)
+        stride : int
+            stride of moving average in hours
+        start_hour : int
+            hour of start for moving average in experiment. Default is zero
+        end_hour : int
+            hour of end for moving average in experiment. Default is last hour
+            entry
+
+        Returns
+        -------
+
+        NCCF_array : NCCF_array
+            Data type for storing NCCFs array data
         '''
+        if end_hour is None:
+            end_hour = self.num_periods
 
         exp_length = self.num_periods
 
-        if avg_time > exp_length:
+        dates = []
+        for k in range(exp_length):
+            hours_to_add = datetime.timedelta(hours=k)
+            dates.append(self.start_time + hours_to_add)
+
+        if avg_time > (end_hour-start_hour):
             raise Exception ('average time is longer than experiment length')
         if avg_time % 2 is not 1:
             raise Exception ('average time must be odd')
 
         m = avg_time
-        n = exp_length
+        n = end_hour
 
-        bar = progressbar.ProgressBar(maxval=n-m-1, \
+        bar = progressbar.ProgressBar(maxval=int(((n-m-1) - start_hour)/stride), \
             widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
-        bar.start()
+        if verbose: bar.start()
 
         tdgfs = []
-        for k in range(n-m-1):
+        dates_new = []
+        count = 0
+        for k in range(start_hour,n-m-1,stride):
             ma_start = k
             ma_mid = int(k + (m-1)/2)
             ma_end = k+m-1
             
+            dates_new.append(dates[ma_mid])
             try:
                 tdgfs.append(self.average_NCF(ma_start,ma_end))
             except UnboundLocalError:
                 print('test')
-            bar.update(k)
+            
+            if verbose: bar.update(count)
+            count = count + 1
         
-        return np.array(tdgfs)
+        NCCFs = np.array(tdgfs)
+        dates = np.array(dates_new)
+        if self.htype == 'broadband':
+            Fs = 64000
+        elif self.htype == 'low_frequency':
+            Fs = 200
+        else:
+            raise Exception ('Invalid Hydrophone Type')
+        Ts = 1/Fs
+
+        t = np.arange(-self.W + Ts,self.W - Ts, Ts)
+
+        NCCFs_object = NCCF_array(NCCFs, dates, t, stride, avg_time)
+        return NCCFs_object
 
 
 class NCCF_array:
@@ -892,8 +935,35 @@ class NCCF_array:
     -------
     '''
 
-    def __init__(self, NCCF, dates, t, stride, avg_len):
-        self.NCCF = NCCF
+    def __init__(self, NCCFs, dates, t, stride, avg_len):
+        self.NCCFs = NCCFs
         self.dates = dates
         self.t = stride
-        self.avg_len
+        self.avg_len = avg_len
+        
+        # Manually Determined Peak Windows (arbitrary width)
+        peak_windows = [
+            [5535, 5635],
+            [5303, 5503],
+            [4969, 5169],
+            [4622, 4782],
+            [6367, 6467],
+            [6498, 6698],
+            [6833, 7033],
+            [7242, 7402],
+        ]
+
+        peak_window_slices = []
+        for k in range(len(peak_windows)):
+            peak_window_slices.append(np.s_[peak_windows[k][0]:peak_windows[k][1]])
+
+        self.peaks = {
+            'dA': self.NCCFs[:,peak_window_slices[0]],
+            's1b0A': self.NCCFs[:,peak_window_slices[1]],
+            's2b1A': self.NCCFs[:,peak_window_slices[2]],
+            's3b2A': self.NCCFs[:,peak_window_slices[3]],
+            'dB': self.NCCFs[:,peak_window_slices[4]],
+            's1b0B': self.NCCFs[:,peak_window_slices[5]],
+            's2b1B': self.NCCFs[:,peak_window_slices[6]],
+            's3b2B': self.NCCFs[:,peak_window_slices[7]]
+        }
