@@ -32,7 +32,7 @@ xlabel('Propogation Time (s)');
 % Create title
 title('TDGF Emergence in 2018')
 
-view(axes1,[-37.1998095155321 68.9971337579618]);
+view(axes1,[-30.2557894736842 90]);
 grid(axes1,'on');
 hold(axes1,'off');
 % Set the remaining axes properties

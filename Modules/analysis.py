@@ -174,7 +174,7 @@ class NCF_analysis:
             xcorr_len = 2*self.W*self.Fs - 1
             xcorr = np.empty(xcorr_len)
             xcorr[:] = np.NaN
-            print('Entire Average Period Invalid')
+            print('\n Entire Average Period Invalid')
         num_available = hour_end - hour_start - invalid
         self.num_available = num_available
         xcorr_avg = xcorr / num_available #changed from num_available
@@ -515,8 +515,14 @@ class NCF_analysis:
         count = 0
         signal_amp = np.zeros(((end-start)+1,1))
         noise_std = np.zeros(((end-start)+1,1))
+
+        bar = progressbar.ProgressBar(maxval=end-start+1, \
+            widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
+        bar.start()
+
+
         for k in range(start, end+1):
-            xcorr = self.average_NCF(0,k)
+            xcorr = self.average_NCF(start,k)
             
             # Look within -3.5 to -2.5 seconds
             bound1 = np.argmin(np.abs(self.t+2.5))
@@ -524,28 +530,30 @@ class NCF_analysis:
 
             signal_amp[count] = np.max(xcorr[bound2:bound1])
 
-            # Harded to look for noise between +-2 seconds
-            idx1 = np.argmin(np.abs(self.t+2))
-            idx2 = np.argmin(np.abs(self.t-2))
+            # Harded to look for noise between +-1 seconds
+            idx1 = np.argmin(np.abs(self.t+1))
+            idx2 = np.argmin(np.abs(self.t-1))
 
             noise_std[count] = np.std(xcorr[idx1:idx2])
 
             count = count+1
+            bar.update(count)
 
         SNR = 20*np.log10(signal_amp/noise_std)
 
         if plot:
+            sns.reset_orig()
             fig = plt.figure(figsize=(7,5))
             plt.plot(SNR, linewidth='2')
             #plt.title(f'Plot of SNR for {(end-start)+1} Hours', fontsize=18, y=1.08)
 
             plt.xlabel('Average Time (Hours)', fontsize=16)
             plt.ylabel('SNR (dB)', fontsize=16)
-            plt.grid()
+
             if savefig:
                 if file_name == None:
                     raise Exception('Invalid Filename')
-                fig.savefig(file_name, dpi=200)
+                fig.savefig(file_name, dpi=300)
 
         return SNR
 
