@@ -9,7 +9,7 @@ import progressbar
 import scipy
 from scipy import signal
 
-class NCF_analysis:
+class NCCF_experiment:
 
     '''
     class with tools for analyzing NCFs. NCF experiments are stored in ./NCFs.
@@ -35,6 +35,8 @@ class NCF_analysis:
         length of short time window in seconds
     distance_between_nodes : float
         distance between the two nodes (in km)
+    xcorr : numpy array
+        NCCF created from pickle files
 
     Methods
     -------
@@ -142,10 +144,6 @@ class NCF_analysis:
 
     def average_NCF(self, hour_start, hour_end, plot=False):
         invalid = 0
-        #print(self.W)
-        #print(self.Fs)
-        #print(hour_start)
-        #print(hour_end)
 
         for k in range(hour_start,hour_end):
             ckpt_name = self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
@@ -181,13 +179,15 @@ class NCF_analysis:
 
         self.xcorr = xcorr_avg
 
-        # create time variable in NCF_analysis class
+        # create time variable in NCCF_experiment class
         dt = 1/self.Fs
         self.t = np.arange(-xcorr.shape[0]*dt/2,xcorr.shape[0]*dt/2,dt)
 
         num_available_short = hour_end - hour_start - invalid
         if plot:
             self.NCF_plot(xcorr_avg, num_available_short)
+        
+        print(xcorr_avg.shape)
         return xcorr_avg
 
 
@@ -867,3 +867,33 @@ class NCF_analysis:
             bar.update(k)
         
         return np.array(tdgfs)
+
+
+class NCCF_array:
+    '''
+    data type for storing Noise Cross Correlation Function (NCCF) Experiments
+
+    Attributes
+    ----------
+    NCCF : numpy array
+        2D array containing noise cross correlation functions. Array has shape
+        [M,N] where M is the number of noise cross correlation functions and
+        N is the number of time samples in each NCCF.
+    dates : numpy array of datetime.datetime objects
+        1D array containing the start times of each NCCF.
+    t : numpy array
+        1D array containing the time values for each time bin of a NCCF.
+    stride : int
+        stride of the moving average used to create each NCCF (in hours)
+    avg_len : int
+        length of moving average used to create each NCCF (in hours)
+
+    Methods
+    -------
+    '''
+
+    def __init__(self, NCCF, dates, t, stride, avg_len):
+        self.NCCF = NCCF
+        self.dates = dates
+        self.t = stride
+        self.avg_len

@@ -107,7 +107,7 @@ def plot_SNR_spec(time, freq, values, SNR, file_name, start_time):
 
 # Load NCCF Experiment
 file_name = "/Users/jhrag/Code/Noise_Interferometry/NCFs/MJ03F-MJ03E/2016"
-exp1 = analysis.NCF_analysis(file_name, verbose=True)
+exp1 = analysis.NCCF_experiment(file_name, verbose=True)
 
 
 # Calculate SNR and Merge Spectrograms for Time Period
