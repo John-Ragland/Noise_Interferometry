@@ -9,6 +9,61 @@ import progressbar
 import scipy
 from scipy import signal
 import datetime
+import warnings
+
+# Define manually determined peak slices (in delay time dimension)
+peak_windows = [
+    [5535, 5635],
+    [5303, 5503],
+    [4969, 5169],
+    [4622, 4782],
+    [6367, 6467],
+    [6498, 6698],
+    [6833, 7033],
+    [7242, 7402],
+]
+
+slices = []
+for k in range(len(peak_windows)):
+    slices.append(np.s_[peak_windows[k][0]:peak_windows[k][1]])
+
+peak_names = ['dA', 's1b0A', 's2b1A', 's3b2A', 'dB', 's1b0B', 's2b1B', 's3b2B']
+peak_slices = dict(zip(peak_names,slices))
+
+
+def snr_of_single_NCCF(NCCF, peak_id, t):
+    '''
+    Parameters
+    ----------
+    NCCF : numpy array
+        single NCCF of shape [1,n]
+    peak_id : str
+        peak identifier string
+    t : numpy array
+        time array (usually shape [19999,])
+
+    Returns
+    -------
+    SNR : float
+        SNR of peak in dB
+    '''
+    
+    noise_bounds = np.array([-1.5, 1.5])
+    NCCF_c = scipy.signal.hilbert(NCCF)
+
+    noise_idx = np.array([
+        np.argmin(np.abs(t - noise_bounds[0])),
+        np.argmin(np.abs(t - noise_bounds[1]))
+    ])
+    
+    noise_slice = np.s_[noise_idx[0]:noise_idx[1]]
+    noise_std = np.std(np.abs(NCCF_c[noise_slice]))
+
+    peak_amp = np.max(np.abs(NCCF_c[peak_slices[peak_id]]))
+    SNR = 20*np.log10(peak_amp/noise_std)
+
+    return SNR
+
 
 class NCCF_experiment:
     '''
@@ -118,7 +173,7 @@ class NCCF_experiment:
             return header
 
 
-    def available_hours(self):
+    def available_hours(self, savefig=False):
         NCF_available = np.zeros((self.num_periods,1))
         num_available = 0
 
@@ -132,33 +187,63 @@ class NCCF_experiment:
             except:
                 NCF_available[k] = 0
 
-        fig = plt.figure(figsize=(10,0.5))
+        fig = plt.figure(figsize=(20,0.5))
         ax = plt.imshow(NCF_available.T, aspect='auto')
-
         ax.axes.get_yaxis().set_visible(False)
         plt.xlabel('Hours')
         self.num_available = num_available
+
+        if savefig:
+            fig.savefig('available_hours.png')
+
 
         print(f'Number of Available hours: {num_available}')
 
 
     def average_NCF(self, hour_start, hour_end, plot=False, verbose=False):
+        '''
+        reads pickle file and averages between hour_start and hour_end and
+        returns numpy array of shape [M,] where M is the number of points in
+        time dimension (normally 11999 for low frequency and 30 s w)
+
+        Parameters
+        ----------
+        hour_start : int
+            start hour
+        hour_end : int
+            end hour
+        plot : bool
+            indicates whether to plot NCCF or not
+        verbose : bool
+            indicates whether to print updates or not
+
+        Returns
+        -------
+        xcorr_avg : numpy array
+            average NCCF between hour_start and hour_end (shape [M,])
+        num_available : float
+            number of hours within average period that are not invalid
+        '''
+        
         invalid = 0
 
-        for k in range(hour_start,hour_end):
+        for k in range(hour_start,hour_end+1):
+            # Read Pickle File
             ckpt_name = self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
             try:
                 with open(ckpt_name, 'rb') as f:
                     xcorr_1hr = pickle.load(f)
-
+            # if pickle file read results in error
             except:
                 invalid = invalid + 1
                 continue
-
+            
+            # if file contains any NaN Value
             if np.isnan(np.sum(xcorr_1hr)):
                 invalid = invalid + 1
                 continue
 
+            # No errors (either add to xcorr or create xcorr)
             else:
                 try:
                     xcorr = xcorr + xcorr_1hr
@@ -173,8 +258,10 @@ class NCCF_experiment:
             xcorr = np.empty(xcorr_len)
             xcorr[:] = np.NaN
             if verbose: print('\n Entire Average Period Invalid')
-        num_available = hour_end - hour_start - invalid
+        
+        num_available = (hour_end+1) - hour_start - invalid
         self.num_available = num_available
+        # make average instead of sum
         xcorr_avg = xcorr / num_available #changed from num_available
 
         self.xcorr = xcorr_avg
@@ -183,11 +270,10 @@ class NCCF_experiment:
         dt = 1/self.Fs
         self.t = np.arange(-xcorr.shape[0]*dt/2,xcorr.shape[0]*dt/2,dt)
 
-        num_available_short = hour_end - hour_start - invalid
         if plot:
-            self.NCF_plot(xcorr_avg, num_available_short)
+            self.NCF_plot(xcorr_avg, num_available)
 
-        return xcorr_avg
+        return xcorr_avg, num_available
 
 
     def NCF_plot(self, xcorr, num_valid, save_fig=False, file_name=None, frequency=False, xlimits=None, ylimits=None, symetric=False, print_time_delay=False, title=None):
@@ -249,7 +335,7 @@ class NCCF_experiment:
         interval=int(interval)
 
         # set y limit
-        xcorr = self.average_NCF(1,2)
+        xcorr, num_available = self.average_NCF(1,2)
         ylim = np.max(np.abs(xcorr))
 
         # matplotlib.rcParams[figure.max_open_warning'] = 0
@@ -266,7 +352,7 @@ class NCCF_experiment:
             t = np.arange(-xcorr.shape[0]*dt/2,xcorr.shape[0]*dt/2,dt)
             f = np.linspace(0,self.Fs,xcorr.shape[0])
             try:
-                y = self.average_NCF(1,i)
+                y, num_available = self.average_NCF(1,i)
             except:
                 y = np.squeeze(np.zeros((xcorr.shape[0],1)))
 
@@ -301,7 +387,7 @@ class NCCF_experiment:
         interval=int(interval)
 
         # set y limit
-        xcorr = self.average_NCF(1,2)
+        xcorr, num_available = self.average_NCF(1,2)
 
         # matplotlib.rcParams[figure.max_open_warning'] = 0
         if xlim == None:
@@ -317,7 +403,7 @@ class NCCF_experiment:
             t = np.arange(-xcorr.shape[0]*dt/2,xcorr.shape[0]*dt/2,dt)
             f = np.linspace(0,self.Fs,xcorr.shape[0])
             try:
-                y = self.average_NCF(i,i+1)
+                y, num_available = self.average_NCF(i,i+1)
             except:
                 y = np.squeeze(np.zeros((xcorr.shape[0],1)))
 
@@ -352,7 +438,7 @@ class NCCF_experiment:
         interval=int(interval)
 
         # set y limit
-        xcorr = self.average_NCF(1,2)
+        xcorr, num_available = self.average_NCF(1,2)
         ylim = np.max(np.abs(xcorr))
 
         # matplotlib.rcParams[figure.max_open_warning'] = 0
@@ -383,7 +469,7 @@ class NCCF_experiment:
                 y = np.zeros(np.shape(t))
             
             try:
-                y = self.average_NCF(1,i)
+                y, num_available = self.average_NCF(1,i)
             except:
                 y = np.squeeze(np.zeros((xcorr.shape[0],1)))
 
@@ -483,7 +569,7 @@ class NCCF_experiment:
         return
 
 
-    def SNR_plot(self, start, end, mode=0, t_peak=None, plot=False, savefig=False,
+    def SNR_plot(self, start, end, peak_id, plot=False, savefig=False,
         file_name=None):
         '''
         Attributes
@@ -492,11 +578,8 @@ class NCCF_experiment:
             index of hour to start within directory
         end : int
             index of hour to end within directory
-        mode : int
-            specifies which mode to use to calculate SNR. Only mode implemented
-            at this time is mode 0.
-            0 - signal peak is max of correlation
-            1 - signal peak is +- 0.5 seconds of t_peak
+        peak_id : str
+            specified which peak to calculate SNR for
         plot : bool
             specifices whether to plot SNR or not
         savefig : bool
@@ -519,10 +602,14 @@ class NCCF_experiment:
             widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
         bar.start()
 
-
+        t = np.linspace(-self.W,self.W,self.Fs*2*self.W-1)
+        SNR2 = []
         for k in range(start, end+1):
-            xcorr = self.average_NCF(start,k)
+            xcorr, num_available = self.average_NCF(start,k)
             
+            # Get SNR for peak_id
+            SNR2.append(snr_of_single_NCCF(xcorr, peak_id, t))
+
             # Look within -3.5 to -2.5 seconds
             bound1 = np.argmin(np.abs(self.t+2.5))
             bound2 = np.argmin(np.abs(self.t+3.5))
@@ -537,7 +624,7 @@ class NCCF_experiment:
 
             count = count+1
             bar.update(count)
-
+        plt.plot(SNR2)
         SNR = 20*np.log10(signal_amp/noise_std)
 
         if plot:
@@ -587,8 +674,8 @@ class NCCF_experiment:
         for k in range(start, end+1):
 
 
-            xcorr = self.average_NCF(0,k)
-            xcorr_single = self.average_NCF(0,k)
+            xcorr, num_available = self.average_NCF(0,k)
+            xcorr_single, num_available = self.average_NCF(0,k)
 
             count = count+1
 
@@ -862,11 +949,13 @@ class NCCF_experiment:
 
         exp_length = self.num_periods
 
+        # Create dates variable
         dates = []
-        for k in range(exp_length):
+        for k in range(end_hour):
             hours_to_add = datetime.timedelta(hours=k)
             dates.append(self.start_time + hours_to_add)
 
+        # Check if avg time is valid
         if avg_time > (end_hour-start_hour):
             raise Exception ('average time is longer than experiment length')
         if avg_time % 2 is not 1:
@@ -875,24 +964,31 @@ class NCCF_experiment:
         m = avg_time
         n = end_hour
 
-        bar = progressbar.ProgressBar(maxval=int(((n-m-1) - start_hour)/stride), \
+        bar = progressbar.ProgressBar(maxval=int(((end_hour-start_hour)-m)/stride), \
             widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
         if verbose: bar.start()
 
         tdgfs = []
+        num_available = []
         dates_new = []
         count = 0
-        for k in range(start_hour,n-m-1,stride):
-            ma_start = k
-            ma_mid = int(k + (m-1)/2)
-            ma_end = k+m-1
+
+        # k is now middle average
+        for k in range(int(start_hour + (m-1)/2), int(end_hour-(m-1)/2) ,stride):
+            ma_start = int(k - (m-1)/2)
+            ma_mid = int(k)
+            ma_end = int(k+(m-1)/2)
             
+
+            # print(ma_start, ma_mid, ma_end)
             dates_new.append(dates[ma_mid])
             try:
-                tdgfs.append(self.average_NCF(ma_start,ma_end))
+                nccf, x = self.average_NCF(ma_start, ma_end)
+                num_available.append(x)
+                tdgfs.append(nccf)
             except UnboundLocalError:
                 print('test')
-            
+
             if verbose: bar.update(count)
             count = count + 1
         
@@ -906,9 +1002,8 @@ class NCCF_experiment:
             raise Exception ('Invalid Hydrophone Type')
         Ts = 1/Fs
 
-        t = np.arange(-self.W + Ts,self.W - Ts, Ts)
-
-        NCCFs_object = NCCF_array(NCCFs, dates, t, stride, avg_time)
+        NCCFs_object = NCCF_array(
+            NCCFs, stride, avg_time, num_available, dates=dates)
         return NCCFs_object
 
 
@@ -918,7 +1013,7 @@ class NCCF_array:
 
     Attributes
     ----------
-    NCCF : numpy array
+    NCCFs : numpy array
         2D array containing noise cross correlation functions. Array has shape
         [M,N] where M is the number of noise cross correlation functions and
         N is the number of time samples in each NCCF.
@@ -930,18 +1025,38 @@ class NCCF_array:
         stride of the moving average used to create each NCCF (in hours)
     avg_len : int
         length of moving average used to create each NCCF (in hours)
+    peaks : dictionary
+        keys are string to specify peak name. d(A or B) or sxby(A or B).
+        where x is number of surface reflections, and y is the number of
+        bottom reflections. A refers to lag peaks, B refers to lead peaks.
+        dictionary returns numpy array of specified peak for all dates in 
+        NCCFs
+    peak_slices : dictionary
+        keys are peak_names, returns numpy slice for tau dimension of NCCFs
+    peak_window_idx : dictionary
+        manual index of peak bounds
+    NCCFs_c : numpy array
+        NCCFs, but delay time dimension has been converted to complex signal
+        using Hilbert Transform
 
     Methods
     -------
     '''
 
-    def __init__(self, NCCFs, dates, t, stride, avg_len):
+    def __init__(self, NCCFs, stride, avg_len, num_available, dates=None, t=None):
         self.NCCFs = NCCFs
         self.dates = dates
-        self.t = stride
+        self.stride = stride
         self.avg_len = avg_len
-        
-        # Manually Determined Peak Windows (arbitrary width)
+        self.num_available = num_available
+        # default t (None) is Fs = 200, W = 30s
+        if t == None:
+            W = 30
+            Fs = 200
+            self.t = np.linspace(-W,W,Fs*2*W-1)
+        else:
+            self.t = t
+        '''
         peak_windows = [
             [5535, 5635],
             [5303, 5503],
@@ -953,17 +1068,136 @@ class NCCF_array:
             [7242, 7402],
         ]
 
-        peak_window_slices = []
+        slices = []
         for k in range(len(peak_windows)):
-            peak_window_slices.append(np.s_[peak_windows[k][0]:peak_windows[k][1]])
+            slices.append(np.s_[peak_windows[k][0]:peak_windows[k][1]])
 
+        peak_names = ['dA', 's1b0A', 's2b1A', 's3b2A', 'dB', 's1b0B', 's2b1B', 's3b2B']
+        '''
+        self.peak_slices = peak_slices
+        
         self.peaks = {
-            'dA': self.NCCFs[:,peak_window_slices[0]],
-            's1b0A': self.NCCFs[:,peak_window_slices[1]],
-            's2b1A': self.NCCFs[:,peak_window_slices[2]],
-            's3b2A': self.NCCFs[:,peak_window_slices[3]],
-            'dB': self.NCCFs[:,peak_window_slices[4]],
-            's1b0B': self.NCCFs[:,peak_window_slices[5]],
-            's2b1B': self.NCCFs[:,peak_window_slices[6]],
-            's3b2B': self.NCCFs[:,peak_window_slices[7]]
+            'dA': self.NCCFs[:,slices[0]],
+            's1b0A': self.NCCFs[:,slices[1]],
+            's2b1A': self.NCCFs[:,slices[2]],
+            's3b2A': self.NCCFs[:,slices[3]],
+            'dB': self.NCCFs[:,slices[4]],
+            's1b0B': self.NCCFs[:,slices[5]],
+            's2b1B': self.NCCFs[:,slices[6]],
+            's3b2B': self.NCCFs[:,slices[7]]
         }
+
+        # add NCCFs_c - complex version of NCCFs
+        self.NCCFs_c = scipy.signal.hilbert(self.NCCFs)
+
+
+    def phase_of_peak(self, peak_id):
+        '''
+        phase_of_peak - finds phase of peak identified by peak_id and returns
+            the [M,] array of phase for each date
+
+        Parameters
+        ----------
+        peak_id : str
+            string to specify peak name. d(A or B) or sxby(A or B). where x is number
+            of surface reflections, and y is the number of bottom reflections.
+            A refers to lag peaks, B refers to lead peaks
+        
+        Returns
+        -------
+        phase_array : numpy array
+            array of shape [M,] containing the phase (in degrees) of specified
+            peak for each date m.
+        '''
+
+        tdgf_crop = self.peaks[peak_id]
+
+        tdgf_c = self.NCCFs_c[:,self.peak_slices[peak_id]]
+        tdgf_f = scipy.fft.fft(tdgf_c, axis=1)
+        data_mag = np.abs(tdgf_f)
+        data_ang = np.angle(tdgf_f)
+
+        data_90 = np.real(scipy.fft.ifft(data_mag*np.exp(1j*(data_ang + np.pi/2)), axis=1))
+
+        a1 = np.sum(tdgf_crop,axis=1)
+        a2 = np.sum(data_90, axis=1)
+
+        phase2 = np.rad2deg(np.arctan2(-a2,a1)+np.pi)
+        phase2 = phase2 % 360
+
+        return phase2
+
+
+    def snr_of_peak_amp(self, peak_id):
+        '''
+        snr_of_peak_amp - find SNR of specified peak using amplitude method
+            (peak amp / std of noise)
+
+        Parameters
+        ----------
+        peak_id : str
+            string to specify peak name. d(A or B) or sxby(A or B). where x is number
+            of surface reflections, and y is the number of bottom reflections.
+            A refers to lag peaks, B refers to lead peaks
+
+        Returns
+        -------
+        snr_plot : numpy array
+            array of shape [m,] containing amplitude SNR (in dB) for specified
+            peak for each date instance of averaged NCCF
+        '''
+
+        noise_bounds = np.array([-1.5, 1.5])
+        NCCFs_c = self.NCCFs_c
+
+        noise_idx = np.array([
+            np.argmin(np.abs(self.t - noise_bounds[0])),
+            np.argmin(np.abs(self.t - noise_bounds[1]))
+        ])
+        
+        noise_slice = np.s_[noise_idx[0]:noise_idx[1]]
+        noise_std = np.std(np.abs(self.NCCFs_c[:,noise_slice]), axis=1)
+
+        peak_amp = np.max(np.abs(NCCFs_c[:,self.peak_slices[peak_id]]),axis=1)
+        peak_idx = np.argmax(np.abs(NCCFs_c[:,self.peak_slices[peak_id]]),axis=1)
+
+        peak_time = (peak_idx + self.peak_slices[peak_id].start)/200 - 30
+        SNR = 20*np.log10(peak_amp/noise_std)
+
+        if np.max(np.abs(np.gradient(peak_idx))) > 12:
+            warnings.warn('Peak index jumps more than 3 in single step')
+        return SNR, peak_time, noise_std
+
+
+    def SNR_plots(self):
+        '''
+        Calculate 24 SNR Plots (using magnitude signal) for year of data and
+        save as PNGs in file directory /SNR_plots
+        '''
+        
+        if self.avg_len != 1:
+            raise Exception ('Average length must be 1 for this method. Please recalculate NCCFs_array with avg_len = 1')
+
+        for k in range(24):
+            start_time = k*356
+            end_time = (k+1)*365 - 1
+            print(start_time, end_time)
+            NCCF_avg = []
+            for n in range(start_time, end_time):
+                print(start_time, n+1)
+                temp = np.mean(np.abs(self.NCCFs_c[start_time:n+1,:]),axis=0)
+        
+                return temp
+
+
+    def compute_2D_SNR_plots(self):
+        '''
+        takes NCCFs_array (with stride and avg_len = 1) and computes 2D SNR
+        Plots. These plots consist of 2D array [dates, avg_time] where dates
+        specifies the hour of the year and avg_time specifies how many hours
+        are averaged. Z value is SNR in dB
+        '''
+        if self.stride != 1 and self.avg_len != 1:
+            raise Exception('Stride and avg_len of NCCFs_array must be 1 for this method. Please recalculate NCCFs_array')
+
+
