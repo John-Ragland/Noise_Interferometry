@@ -140,7 +140,6 @@ class NCCF_experiment:
 
     def __read_header(self, verbose=False):
         header_name = self.ckpt_dir + '/0HEADER.pkl'
-
         with open(header_name, 'rb') as f:
             header = pickle.load(f)
 
@@ -236,11 +235,15 @@ class NCCF_experiment:
             # if pickle file read results in error
             except:
                 invalid = invalid + 1
+                if k == hour_end:
+                    self.SNR_plot_flag = True
                 continue
             
             # if file contains any NaN Value
             if np.isnan(np.sum(xcorr_1hr)):
                 invalid = invalid + 1
+                if k == hour_end:
+                    self.SNR_plot_flag = True
                 continue
 
             # No errors (either add to xcorr or create xcorr)
@@ -249,6 +252,8 @@ class NCCF_experiment:
                     xcorr = xcorr + xcorr_1hr
                 except NameError:
                     xcorr = xcorr_1hr
+
+                self.SNR_plot_flag = False
 
         # Check if variable xcorr exists, if not create NaN entry
         try:
@@ -591,8 +596,8 @@ class NCCF_experiment:
         -------
         t : numpy array
             time variable
-        SNR : numpy array
-            array of SNR values
+        SNR_ma : numpy array
+            masked array of valid SNR values
         '''
         count = 0
         signal_amp = np.zeros(((end-start)+1,1))
@@ -603,29 +608,17 @@ class NCCF_experiment:
         bar.start()
 
         t = np.linspace(-self.W,self.W,self.Fs*2*self.W-1)
-        SNR2 = []
+        SNR = []
+        last_valid = []
         for k in range(start, end+1):
             xcorr, num_available = self.average_NCF(start,k)
+            last_valid.append(self.SNR_plot_flag)
             
             # Get SNR for peak_id
-            SNR2.append(snr_of_single_NCCF(xcorr, peak_id, t))
-
-            # Look within -3.5 to -2.5 seconds
-            bound1 = np.argmin(np.abs(self.t+2.5))
-            bound2 = np.argmin(np.abs(self.t+3.5))
-
-            signal_amp[count] = np.max(xcorr[bound2:bound1])
-
-            # Harded to look for noise between +-1 seconds
-            idx1 = np.argmin(np.abs(self.t+1))
-            idx2 = np.argmin(np.abs(self.t-1))
-
-            noise_std[count] = np.std(xcorr[idx1:idx2])
+            SNR.append(snr_of_single_NCCF(xcorr, peak_id, t))
 
             count = count+1
             bar.update(count)
-        plt.plot(SNR2)
-        SNR = 20*np.log10(signal_amp/noise_std)
 
         if plot:
             sns.reset_orig()
@@ -641,7 +634,10 @@ class NCCF_experiment:
                     raise Exception('Invalid Filename')
                 fig.savefig(file_name, dpi=300)
 
-        return SNR
+        # make SNR_ma - masked array
+        SNR_ma = np.ma.masked_array(SNR,last_valid)
+        
+        return SNR_ma
 
 
     def xcorr_loop(self, start, end, plot=False, savefig=False,

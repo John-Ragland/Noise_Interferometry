@@ -1,6 +1,0 @@
-% create SNR Plots 2
-
-clear
-clc
-close all
-load('2017_SNR_plot

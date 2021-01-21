@@ -14,7 +14,7 @@ print(code_dir)
 from Noise_Interferometry.Modules import calculate
 # sys.path.append(ooipy_dir)
 
-num_periods = 1488
+num_periods = 10
 avg_time = 60  #minutes 
 start_time = datetime.datetime(2019,7,1,0,0,0) # time of first sample
 node1 = 'Central_Caldera'
