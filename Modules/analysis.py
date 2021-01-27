@@ -31,7 +31,7 @@ peak_names = ['dA', 's1b0A', 's2b1A', 's3b2A', 'dB', 's1b0B', 's2b1B', 's3b2B']
 peak_slices = dict(zip(peak_names,slices))
 
 
-def snr_of_single_NCCF(NCCF, peak_id, t):
+def snr_of_single_NCCF_amp(NCCF, peak_id, t):
     '''
     Parameters
     ----------
@@ -55,6 +55,40 @@ def snr_of_single_NCCF(NCCF, peak_id, t):
         np.argmin(np.abs(t - noise_bounds[0])),
         np.argmin(np.abs(t - noise_bounds[1]))
     ])
+    
+    noise_slice = np.s_[noise_idx[0]:noise_idx[1]]
+    noise_std = np.std(np.abs(NCCF_c[noise_slice]))
+
+    peak_amp = np.max(np.abs(NCCF_c[peak_slices[peak_id]]))
+    SNR = 20*np.log10(peak_amp/noise_std)
+
+    return SNR
+
+
+def snr_of_single_NCCF_energy(NCCF, peak_id, t):
+    '''
+    Parameters
+    ----------
+    NCCF : numpy array
+        single NCCF of shape [1,n]
+    peak_id : str
+        peak identifier string
+    t : numpy array
+        time array (usually shape [19999,])
+
+    Returns
+    -------
+    SNR : float
+        SNR of peak in dB
+    '''
+    
+    #noise_bounds = np.array([-1.5, 1.5])
+    NCCF_c = scipy.signal.hilbert(NCCF)
+
+    #noise_idx = np.array([
+    #    np.argmin(np.abs(t - noise_bounds[0])),
+    #    np.argmin(np.abs(t - noise_bounds[1]))
+    #])
     
     noise_slice = np.s_[noise_idx[0]:noise_idx[1]]
     noise_std = np.std(np.abs(NCCF_c[noise_slice]))
@@ -615,7 +649,7 @@ class NCCF_experiment:
             last_valid.append(self.SNR_plot_flag)
             
             # Get SNR for peak_id
-            SNR.append(snr_of_single_NCCF(xcorr, peak_id, t))
+            SNR.append(snr_of_single_NCCF_amp(xcorr, peak_id, t))
 
             count = count+1
             bar.update(count)
@@ -1162,7 +1196,47 @@ class NCCF_array:
 
         if np.max(np.abs(np.gradient(peak_idx))) > 12:
             warnings.warn('Peak index jumps more than 3 in single step')
-        return SNR, peak_time, noise_std
+        return SNR, peak_idx, noise_std
+
+
+    def snr_of_peak_energy(self, peak_id):
+        '''
+        snr_of_peak_amp - find SNR of specified peak using energy method
+            10*log((sig.T*sig / noise.T*noise))
+
+        Parameters
+        ----------
+        peak_id : str
+            string to specify peak name. d(A or B) or sxby(A or B). where x is number
+            of surface reflections, and y is the number of bottom reflections.
+            A refers to lag peaks, B refers to lead peaks
+
+        Returns
+        -------
+        snr_plot : numpy array
+            array of shape [m,] containing amplitude SNR (in dB) for specified
+            peak for each date instance of averaged NCCF
+        '''
+        noise_bounds = np.array([-1.5, 1.5])
+        NCCFs_c = self.NCCFs_c
+
+        noise_idx = np.array([
+            np.argmin(np.abs(self.t - noise_bounds[0])),
+            np.argmin(np.abs(self.t - noise_bounds[1]))
+        ])
+    
+
+        noise_slice = np.s_[noise_idx[0]:noise_idx[1]]
+
+        #return np.abs(NCCFs_c[:,self.peak_slices[peak_id]]), np.abs(NCCFs_c[:,noise_slice])
+
+        N = noise_idx[1] - noise_idx[0]
+        noise_energy = 1/N * np.sum((np.abs(NCCFs_c[:,noise_slice]) ** 2),axis=1)
+        M = self.peak_slices[peak_id].stop - self.peak_slices[peak_id].start
+        signal_energy = 1/M * np.sum((np.abs(NCCFs_c[:,self.peak_slices[peak_id]]) ** 2),axis=1)
+
+        SNR = np.log10(signal_energy/noise_energy)
+        return SNR
 
 
     def SNR_plots(self):
