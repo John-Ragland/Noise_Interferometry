@@ -26,9 +26,9 @@ also accomplished in the calculate_NCF() function)::
 import os
 import sys
 cwd = os.getcwd()
-ooipy_dir = os.path.dirname(os.path.dirname(cwd)) + '/ooipy'
+# ooipy_dir = os.path.dirname(os.path.dirname(cwd)) + '/ooipy'
 ni_dir = os.path.dirname(os.path.dirname(cwd)) + '/Noise_Interferometry'
-sys.path.append(ooipy_dir)
+# sys.path.append(ooipy_dir)
 sys.path.append(ni_dir)
 
 from ooipy.request import hydrophone_request
@@ -42,7 +42,7 @@ from multiprocessing.pool import ThreadPool
 import scipy
 from matplotlib import pyplot as plt
 
-def calculate_NCF(NCF_object, loop=False, count=None):
+def calculate_NCF(NCF_object, file_dir, loop=False, count=None):
     '''
     Do all required signal processing, and calculate average Noise
     Correlation Function (NCF) for given average time.
@@ -130,6 +130,10 @@ def calculate_NCF(NCF_object, loop=False, count=None):
         else:
             NCF_object = sabra_processing_b(NCF_object, plot=False)
 
+            # Check if NCF_object is None
+            if NCF_object == None:
+                return None
+
         NCF_object = calc_xcorr(NCF_object, loop, count)
 
     else:
@@ -141,7 +145,7 @@ def calculate_NCF(NCF_object, loop=False, count=None):
 
     # Save NCF to .pkl file if loop is true
     if loop is True:
-        save_avg_period(NCF_object, count=count)
+        save_avg_period(NCF_object, file_dir, count=count)
         return None
     if loop is False:
         return NCF_object
@@ -344,6 +348,14 @@ def sabra_processing_b(NCF_object, plot=False):
     - clipping to 3*std of data of short time noise
     - frequency whitening short time noise
     '''
+
+    # Check if Audio Data Exists
+    try:
+        NCF_object.node1_data
+        NCF_object.node2_data
+    except AttributeError:
+        return None
+
     node1 = NCF_object.node1_data
     node2 = NCF_object.node2_data
 
@@ -729,9 +741,9 @@ def calc_xcorr(NCF_object, loop=False, count=None):
     return NCF_object
 
 
-def save_avg_period(NCF_object, count=None):
+def save_avg_period(NCF_object, file_dir, count=None):
     # Save Checkpoints for every average period
-    filename = './ckpts/ckpt_' + str(count) + '.pkl'
+    filename = file_dir + f'{count:04}.pkl'
 
     try:
         with open(filename, 'wb') as f:
@@ -740,9 +752,7 @@ def save_avg_period(NCF_object, count=None):
     except FileNotFoundError:
         os.makedirs('ckpts')
         with open(filename, 'wb') as f:
-            # pickle.dump(xcorr_short_time, f)
             pickle.dump(NCF_object.NCF, f)
-            # pickle.dump(k,f)
 
     return None
 
@@ -778,7 +788,7 @@ def calc_xcorr_single_thread(h1, h2):
 
 
 def calculate_NCF_loop(
-    num_periods, node1, node2, avg_time, start_time, W, filter_cutoffs,
+    num_periods, node1, node2, avg_time, start_time, W, filter_cutoffs, file_dir,
         verbose=True, whiten=True, htype='low_frequency', kstart=0,
         sp_method='sabra_b', other_notes=None):
     '''
@@ -863,7 +873,7 @@ def calculate_NCF_loop(
             verbose, whiten, htype, sp_method=sp_method)
         print(f'Calculting NCF for Period {k}: {start_time_loop} - \
             {start_time_loop+timedelta(minutes=avg_time)}')
-        calculate_NCF(NCF_object, loop=True, count=k)
+        calculate_NCF(NCF_object, file_dir, loop=True, count=k)
 
     return
 
