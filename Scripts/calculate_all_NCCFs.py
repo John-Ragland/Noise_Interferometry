@@ -43,7 +43,7 @@ for year in years:
     else:
         kstart = 0
 
-    other_notes = 'Looking at Airgun Experiments'
+    other_notes = 'Multi year longterm analysis'
     sp_method = 'sabra_b'
 
     calculate.calculate_NCF_loop(num_periods, node1, node2, avg_time, start_time, W, filter_cutoffs, file_dir=file_dir, verbose=True, whiten=whiten, htype=htype, kstart=kstart, sp_method = sp_method, other_notes=other_notes)

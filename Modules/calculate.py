@@ -25,11 +25,11 @@ also accomplished in the calculate_NCF() function)::
 # Imports unrealeased version of OOIPY from Github (saved locally)
 import os
 import sys
-cwd = os.getcwd()
+#cwd = os.getcwd()
 # ooipy_dir = os.path.dirname(os.path.dirname(cwd)) + '/ooipy'
-ni_dir = os.path.dirname(os.path.dirname(cwd)) + '/Noise_Interferometry'
+#ni_dir = os.path.dirname(os.path.dirname(cwd)) + '/Noise_Interferometry'
 # sys.path.append(ooipy_dir)
-sys.path.append(ni_dir)
+#sys.path.append(ni_dir)
 
 from ooipy.request import hydrophone_request
 import numpy as np

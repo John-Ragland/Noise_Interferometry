@@ -262,7 +262,8 @@ class NCCF_experiment:
 
         for k in range(hour_start,hour_end+1):
             # Read Pickle File
-            ckpt_name = self.ckpt_dir + '/ckpt_'+ str(k) +'.pkl'
+            ckpt_name = f'{self.ckpt_dir}/{k:04}.pkl'
+
             try:
                 with open(ckpt_name, 'rb') as f:
                     xcorr_1hr = pickle.load(f)
@@ -272,7 +273,7 @@ class NCCF_experiment:
                 if k == hour_end:
                     self.SNR_plot_flag = True
                 continue
-            
+
             # if file contains any NaN Value
             if np.isnan(np.sum(xcorr_1hr)):
                 invalid = invalid + 1
@@ -1068,7 +1069,8 @@ class NCCF_array:
     NCCFs_c : numpy array
         NCCFs, but delay time dimension has been converted to complex signal
         using Hilbert Transform
-
+    num_available : numpy array
+        number of hours actually used for averaging at each date step
     Methods
     -------
     '''
@@ -1194,8 +1196,9 @@ class NCCF_array:
         peak_time = (peak_idx + self.peak_slices[peak_id].start)/200 - 30
         SNR = 20*np.log10(peak_amp/noise_std)
 
-        if np.max(np.abs(np.gradient(peak_idx))) > 12:
-            warnings.warn('Peak index jumps more than 3 in single step')
+        #if np.max(np.abs(np.gradient(peak_idx))) > 12:
+        #    warnings.warn('Peak index jumps more than 3 in single step')
+        
         return SNR, peak_idx, noise_std
 
 
@@ -1271,3 +1274,22 @@ class NCCF_array:
             raise Exception('Stride and avg_len of NCCFs_array must be 1 for this method. Please recalculate NCCFs_array')
 
 
+    def SNR_debug(self):
+        '''
+        create plots of peak windows and argmax of peaks
+        '''
+        peak_names2 = ['dA', 's1b0A', 's2b1A', 'dB', 's1b0B', 's2b1B']
+        fig, axes = plt.subplots(2,3, figsize=(10,6))
+        
+        k = 0
+        for ax in fig.get_axes():
+            ax.imshow(self.peaks[peak_names2[k]], aspect='auto', cmap='jet')
+
+            SNR, peak_idx, _ = self.snr_of_peak_amp(peak_names2[k])
+
+            ax.plot(peak_idx, np.arange(0,self.NCCFs.shape[0]),'m')
+            k += 1
+
+
+        plt.tight_layout()
+        return
