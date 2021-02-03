@@ -1274,20 +1274,27 @@ class NCCF_array:
             raise Exception('Stride and avg_len of NCCFs_array must be 1 for this method. Please recalculate NCCFs_array')
 
 
-    def SNR_debug(self):
+    def SNR_debug(self, peak_id):
         '''
         create plots of peak windows and argmax of peaks
         '''
+        
+        fig = plt.figure(figsize=(14,10))
+        plt.imshow(np.abs(self.NCCFs_c[:,self.peak_slices[peak_id]]), aspect='auto')
+        SNR, peak_idx, _ = self.snr_of_peak_amp(peak_id)
+        plt.plot(peak_idx, np.arange(0,self.NCCFs.shape[0]),'r')
+        return
+        
         peak_names2 = ['dA', 's1b0A', 's2b1A', 'dB', 's1b0B', 's2b1B']
         fig, axes = plt.subplots(2,3, figsize=(10,6))
         
         k = 0
         for ax in fig.get_axes():
-            ax.imshow(self.peaks[peak_names2[k]], aspect='auto', cmap='jet')
+            ax.imshow(np.abs(self.NCCFs_c[:,self.peak_slices[peak_names2[k]]]), aspect='auto')
 
             SNR, peak_idx, _ = self.snr_of_peak_amp(peak_names2[k])
 
-            ax.plot(peak_idx, np.arange(0,self.NCCFs.shape[0]),'m')
+            ax.plot(peak_idx, np.arange(0,self.NCCFs.shape[0]),'r')
             k += 1
 
 
