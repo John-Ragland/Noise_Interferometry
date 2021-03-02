@@ -12,6 +12,7 @@ import datetime
 import warnings
 
 # Define manually determined peak slices (in delay time dimension)
+
 peak_windows = [
     [5535, 5635],
     [5303, 5503],
@@ -29,7 +30,6 @@ for k in range(len(peak_windows)):
 
 peak_names = ['dA', 's1b0A', 's2b1A', 's3b2A', 'dB', 's1b0B', 's2b1B', 's3b2B']
 peak_slices = dict(zip(peak_names,slices))
-
 
 def snr_of_single_NCCF_amp(NCCF, peak_id, t):
     '''
@@ -1178,6 +1178,36 @@ class NCCF_array:
             array of shape [m,] containing amplitude SNR (in dB) for specified
             peak for each date instance of averaged NCCF
         '''
+        '''
+        peak_windows_tight = [
+            [5560, 5590],
+            [5393, 5413],
+            [5019, 5119],
+            [4622, 4782],
+            [6392, 6422],
+            [6588, 6608],
+            [6883, 6983],
+            [7242, 7402],
+        ]
+        '''
+        peak_windows_tight = [
+            [5571, 5577],
+            [5398, 5406],
+            [5019, 5119],
+            [4622, 4782],
+            [6414, 6418],
+            [6593, 6601],
+            [6883, 6983],
+            [7242, 7402],
+        ]
+
+        slices_tight_ls = []
+        for k in range(len(peak_windows_tight)):
+            slices_tight_ls.append(np.s_[peak_windows_tight[k][0]:peak_windows_tight[k][1]])
+
+
+        peak_names = ['dA', 's1b0A', 's2b1A', 's3b2A', 'dB', 's1b0B', 's2b1B', 's3b2B']
+        slices_tight = dict(zip(peak_names,slices_tight_ls))
 
         noise_bounds = np.array([-1.5, 1.5])
         NCCFs_c = self.NCCFs_c
@@ -1190,10 +1220,10 @@ class NCCF_array:
         noise_slice = np.s_[noise_idx[0]:noise_idx[1]]
         noise_std = np.std(np.abs(self.NCCFs_c[:,noise_slice]), axis=1)
 
-        peak_amp = np.max(np.abs(NCCFs_c[:,self.peak_slices[peak_id]]),axis=1)
-        peak_idx = np.argmax(np.abs(NCCFs_c[:,self.peak_slices[peak_id]]),axis=1)
+        peak_amp = np.max(np.abs(NCCFs_c[:,slices_tight[peak_id]]),axis=1)
+        peak_idx = np.argmax(np.abs(NCCFs_c[:,slices_tight[peak_id]]),axis=1)
 
-        peak_time = (peak_idx + self.peak_slices[peak_id].start)/200 - 30
+        peak_time = (peak_idx + slices_tight[peak_id].start)/200 - 30
         SNR = 20*np.log10(peak_amp/noise_std)
 
         #if np.max(np.abs(np.gradient(peak_idx))) > 12:
@@ -1274,29 +1304,81 @@ class NCCF_array:
             raise Exception('Stride and avg_len of NCCFs_array must be 1 for this method. Please recalculate NCCFs_array')
 
 
-    def SNR_debug(self, peak_id):
+    def SNR_debug(self):
         '''
         create plots of peak windows and argmax of peaks
         '''
-        
-        fig = plt.figure(figsize=(14,10))
-        plt.imshow(np.abs(self.NCCFs_c[:,self.peak_slices[peak_id]]), aspect='auto')
-        SNR, peak_idx, _ = self.snr_of_peak_amp(peak_id)
-        plt.plot(peak_idx, np.arange(0,self.NCCFs.shape[0]),'r')
-        return
-        
+
+        '''
+        peak_windows_tight = [
+            [5560, 5590],
+            [5393, 5413],
+            [5019, 5119],
+            [4622, 4782],
+            [6392, 6422],
+            [6588, 6608],
+            [6883, 6983],
+            [7242, 7402],
+        ]
+        '''
+        peak_windows_tight = [
+            [5571, 5577],
+            [5398, 5406],
+            [5019, 5119],
+            [4622, 4782],
+            [6414, 6418],
+            [6593, 6601],
+            [6883, 6983],
+            [7242, 7402],
+        ]
+        slices_tight_ls = []
+        for k in range(len(peak_windows_tight)):
+            slices_tight_ls.append(np.s_[peak_windows_tight[k][0]:peak_windows_tight[k][1]])
+
+
+        peak_names = ['dA', 's1b0A', 's2b1A', 's3b2A', 'dB', 's1b0B', 's2b1B', 's3b2B']
+        slices_tight = dict(zip(peak_names,slices_tight_ls))
+
         peak_names2 = ['dA', 's1b0A', 's2b1A', 'dB', 's1b0B', 's2b1B']
         fig, axes = plt.subplots(2,3, figsize=(10,6))
         
         k = 0
         for ax in fig.get_axes():
-            ax.imshow(np.abs(self.NCCFs_c[:,self.peak_slices[peak_names2[k]]]), aspect='auto')
+            ax.imshow(np.abs(self.NCCFs_c[:,slices_tight[peak_names2[k]]]), aspect='auto', origin='lower')
 
             SNR, peak_idx, _ = self.snr_of_peak_amp(peak_names2[k])
 
             ax.plot(peak_idx, np.arange(0,self.NCCFs.shape[0]),'r')
+            plt.sca(ax)
+            plt.xlabel('Times Bins')
+            plt.ylabel('Hours in Year')
             k += 1
 
-
         plt.tight_layout()
+        file_name = f'SNR_and_peak_windows_vtight{self.dates[0].year}.png'
+        fig.savefig(file_name, dpi=400)
+        plt.close()
+        return
+
+
+
+
+        fig = plt.figure(figsize=(14,10))
+        plt.imshow(np.abs(self.NCCFs_c[:,self.peak_slices[peak_id]]), aspect='auto')
+        SNR, peak_idx, _ = self.snr_of_peak_amp(peak_id)
+        plt.plot(peak_idx, np.arange(0,self.NCCFs.shape[0]),'r')
+        return
+
+
+    def peak_idx_plots(self, peak_id):
+        year = self.dates[0].year
+        
+        fig = plt.figure(figsize=(7,5))
+        SNR, peak_idx, _ = self.snr_of_peak_amp(peak_id)
+
+        plt.plot(self.dates, peak_idx)
+        plt.title(f'Peak Index - {peak_id} - {year}')
+        file_name = f'peak_idx_figures/Peak_idx_{peak_id}_{self.dates[0].year}.png'
+        fig.savefig(file_name, dpi=400)
+        plt.close()
         return
