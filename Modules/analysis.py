@@ -1174,6 +1174,14 @@ class NCCF_array:
 
         Returns
         -------
+        SNR : numpy array
+            array of shape (M,) containing amplitude SNR (in dB) for specified
+            peak for each date instace of average NCCF
+        peak_idx : numpy array
+            index of maximum of peak
+        noise_std : float
+            standard deviation of noise window
+        
         snr_plot : numpy array
             array of shape [m,] containing amplitude SNR (in dB) for specified
             peak for each date instance of averaged NCCF
@@ -1224,7 +1232,7 @@ class NCCF_array:
         peak_idx = np.argmax(np.abs(NCCFs_c[:,slices_tight[peak_id]]),axis=1)
 
         peak_time = (peak_idx + slices_tight[peak_id].start)/200 - 30
-        SNR = 20*np.log10(peak_amp/noise_std)
+        SNR = 20*np.log10(peak_amp/(3*noise_std))
 
         #if np.max(np.abs(np.gradient(peak_idx))) > 12:
         #    warnings.warn('Peak index jumps more than 3 in single step')
