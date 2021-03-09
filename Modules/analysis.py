@@ -174,8 +174,13 @@ class NCCF_experiment:
 
     def __read_header(self, verbose=False):
         header_name = self.ckpt_dir + '/0HEADER.pkl'
-        with open(header_name, 'rb') as f:
-            header = pickle.load(f)
+        try:
+            with open(header_name, 'rb') as f:
+                header = pickle.load(f)
+        except FileNotFoundError:
+            header_name = self.ckpt_dir + '/0HEADER_2015.pkl'
+            with open(header_name, 'rb') as f:
+                header = pickle.load(f)
 
         self.start_time = header.start_time
         self.filter_cutoffs = header.filter_cutoffs
@@ -258,11 +263,27 @@ class NCCF_experiment:
             number of hours within average period that are not invalid
         '''
         
+        # Determine length of file name
+        files = os.listdir(self.ckpt_dir)
+        idxs = []
+        for idx, file in enumerate(files):
+            if 'HEADER' in file:
+                idxs.append(idx)
+        # Delete Header Files
+        for idx in reversed(idxs):
+            del files[idx]
+        file_name_length = len(files[0])-4
+
         invalid = 0
 
         for k in range(hour_start,hour_end+1):
             # Read Pickle File
-            ckpt_name = f'{self.ckpt_dir}/{k:04}.pkl'
+            if file_name_length == 4:
+                ckpt_name = f'{self.ckpt_dir}/{k:04}.pkl'
+            if file_name_length == 5:
+                ckpt_name = f'{self.ckpt_dir}/{k:05}.pkl'
+            else:
+                raise Exception('Invalid file name length')
 
             try:
                 with open(ckpt_name, 'rb') as f:
