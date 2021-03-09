@@ -1016,9 +1016,7 @@ class NCCF_experiment:
         m = avg_time
         n = end_hour
 
-        bar = progressbar.ProgressBar(maxval=int(((end_hour-start_hour)-m)/stride), \
-            widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
-        if verbose: bar.start()
+        loop_len = ((end_hour-start_hour)-m)/stride
 
         tdgfs = []
         num_available = []
@@ -1041,7 +1039,7 @@ class NCCF_experiment:
             except UnboundLocalError:
                 print('test')
 
-            if verbose: bar.update(count)
+            if verbose: print(f'{count/loop_len*100:.5}%', end='\r')
             count = count + 1
         
         NCCFs = np.array(tdgfs)
